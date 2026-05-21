@@ -45,11 +45,15 @@
                 {{-- Tombol Login/Logout --}}
                 <li class="nav-item">
                     @if(isset($isLoggedIn) && $isLoggedIn)
-                        <a href="/logout" class="nav-button" style="background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%);">
+                        <a href="{{ route('logout') }}" class="nav-button" style="background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%);"
+                           onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
                             <i class="fas fa-sign-out-alt"></i> Logout
                         </a>
+                        <form id="logout-form" action="{{ route('logout') }}" method="POST" style="display: none;">
+                            @csrf
+                        </form>
                     @else
-                        <a href="/login" class="nav-button">
+                        <a href="{{ route('login') }}" class="nav-button">
                             <i class="fas fa-sign-in-alt"></i> Login
                         </a>
                     @endif
@@ -128,8 +132,6 @@
 
     <!-- JavaScript untuk Animasi dan Navigasi -->
     <script>
-        // ... (script yang sudah ada tetap sama) ...
-        
         // Auto hide alert messages
         document.addEventListener('DOMContentLoaded', function() {
             const alerts = document.querySelectorAll('.alert-success, .alert-error, .alert-info, .alert-warning');
@@ -145,6 +147,44 @@
                 }, 5000);
             });
         });
+        
+        // Back to top button
+        const backToTopButton = document.getElementById('backToTop');
+        if (backToTopButton) {
+            window.addEventListener('scroll', () => {
+                if (window.pageYOffset > 300) {
+                    backToTopButton.classList.add('show');
+                } else {
+                    backToTopButton.classList.remove('show');
+                }
+            });
+            
+            backToTopButton.addEventListener('click', () => {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            });
+        }
+        
+        // Mobile menu toggle
+        const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+        const navMenu = document.getElementById('navMenu');
+        
+        if (mobileMenuBtn && navMenu) {
+            mobileMenuBtn.addEventListener('click', () => {
+                navMenu.classList.toggle('active');
+            });
+        }
+        
+        // Navbar scroll effect
+        const navbar = document.getElementById('navbar');
+        if (navbar) {
+            window.addEventListener('scroll', () => {
+                if (window.pageYOffset > 50) {
+                    navbar.classList.add('scrolled');
+                } else {
+                    navbar.classList.remove('scrolled');
+                }
+            });
+        }
     </script>
 </body>
 </html>

@@ -4,35 +4,17 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use App\Models\Portfolio;
 use App\Models\Skill;
 
 class PortfolioController extends Controller
 {
-    // Data akun yang disimpan di controller
-    private $users = [
-        [
-            'username' => 'ibni',
-            'password' => 'password123',
-            'role' => 'admin'
-        ],
-        [
-            'username' => 'admin',
-            'password' => 'admin123',
-            'role' => 'admin'
-        ],
-        [
-            'username' => 'user',
-            'password' => 'user123',
-            'role' => 'user'
-        ]
-    ];
-
     // Data default portofolio (untuk fallback jika database kosong)
     private $defaultData = [
         'fotoprofil' => 'https://cdn.discordapp.com/attachments/1256123329505660938/1460886503625592924/Screenshot_2025-06-08_002525.png?ex=699feb14&is=699e9994&hm=d343de924bd89500ab705f42c386dcfd8448ffd0b0ab1453061d43ab71905b51',
-        'name' => 'Dari Controller (nama)',
-        'description' => 'Dari Controller (deskripsi)',
+        'name' => 'Ibni Abiyyu',
+        'description' => 'Seorang pengembang web yang bersemangat menciptakan solusi digital inovatif',
         'github_url' => 'https://github.com/PPLG-SMKTI-27/uuk-ganjil-ibni-abiyyu',
         'tiktok_url' => 'https://www.tiktok.com/@meidoragon_',
         'email' => '24_ibni@student.smkti.net',
@@ -72,6 +54,22 @@ class PortfolioController extends Controller
      */
     public function index(Request $request)
     {
+        // Gunakan Auth bawaan Laravel
+        $isLoggedIn = Auth::check();
+        $isAdmin = false;
+        $loggedInUser = null;
+        
+        if ($isLoggedIn) {
+            $user = Auth::user();
+            $loggedInUser = [
+                'username' => $user->name,
+                'email' => $user->email,
+                'role' => $user->role ?? 'user' // Pastikan ada kolom role di users table
+            ];
+            // Cek apakah admin (berdasarkan email atau role)
+            $isAdmin = ($user->email === 'admin@example.com') || ($user->role === 'admin');
+        }
+        
         // Load portfolio dengan skills-nya
         $portfolio = Portfolio::with('skills')->first();
 
@@ -87,15 +85,15 @@ class PortfolioController extends Controller
                 'lokasi' => $this->defaultData['lokasi'],
                 'pendidikan' => $this->defaultData['pendidikan'],
                 'skills' => $this->defaultData['skills'],
-                'isLoggedIn' => $request->session()->get('isLoggedIn', false),
-                'isAdmin' => $request->session()->get('isAdmin', false),
-                'loggedInUser' => $request->session()->get('loggedInUser', null),
+                'isLoggedIn' => $isLoggedIn,
+                'isAdmin' => $isAdmin,
+                'loggedInUser' => $loggedInUser,
                 'editMode' => $request->session()->get('editMode', false),
                 'usingDefaultData' => true
             ]);
         }
 
-        // Konversi skills collection ke array dengan format yang sama seperti defaultData
+        // Konversi skills collection ke array
         $skills = $portfolio->skills->map(function($skill) {
             return [
                 'name' => $skill->name,
@@ -116,63 +114,12 @@ class PortfolioController extends Controller
             'lokasi' => $portfolio->lokasi ?? $this->defaultData['lokasi'],
             'pendidikan' => $portfolio->pendidikan ?? $this->defaultData['pendidikan'],
             'skills' => !empty($skills) ? $skills : $this->defaultData['skills'],
-            'isLoggedIn' => $request->session()->get('isLoggedIn', false),
-            'isAdmin' => $request->session()->get('isAdmin', false),
-            'loggedInUser' => $request->session()->get('loggedInUser', null),
+            'isLoggedIn' => $isLoggedIn,
+            'isAdmin' => $isAdmin,
+            'loggedInUser' => $loggedInUser,
             'editMode' => $request->session()->get('editMode', false),
             'usingDefaultData' => false
         ]);
-    }
-
-    /**
-     * Menampilkan halaman login
-     */
-    public function showLogin()
-    {
-        $portfolio = Portfolio::first();
-        
-        $data = [
-            'name' => $portfolio->name ?? $this->defaultData['name'],
-            'isLoggedIn' => false
-        ];
-        
-        return view('login', $data);
-    }
-
-    /**
-     * Proses login
-     */
-    public function login(Request $request)
-    {
-        $username = $request->input('username');
-        $password = $request->input('password');
-        
-        // Cari user
-        $user = $this->findUser($username, $password);
-        
-        if ($user) {
-            // Simpan status login di session
-            $request->session()->put('isLoggedIn', true);
-            $request->session()->put('loggedInUser', $user);
-            $request->session()->put('isAdmin', ($user['role'] === 'admin'));
-            $request->session()->put('loginMessage', 'Login berhasil! Selamat datang ' . $user['username']);
-            
-            return redirect('/');
-        } else {
-            // Jika salah, kembali ke halaman login dengan pesan error
-            return redirect('/login')->with('error', 'Username atau password salah!');
-        }
-    }
-
-    /**
-     * Proses logout
-     */
-    public function logout(Request $request)
-    {
-        // Hapus session login
-        $request->session()->forget(['isLoggedIn', 'isAdmin', 'loggedInUser', 'editMode']);
-        $request->session()->flash('success', 'Logout berhasil!');
-        return redirect('/');
     }
 
     /**
@@ -180,7 +127,15 @@ class PortfolioController extends Controller
      */
     public function toggleEdit(Request $request)
     {
-        if (!$request->session()->get('isAdmin', false)) {
+        // Cek apakah user login dan admin
+        if (!Auth::check()) {
+            return redirect()->route('login')->with('error', 'Anda harus login terlebih dahulu');
+        }
+        
+        $user = Auth::user();
+        $isAdmin = ($user->email === 'admin@example.com') || ($user->role === 'admin');
+        
+        if (!$isAdmin) {
             return redirect('/')->with('error', 'Akses ditolak! Hanya admin yang bisa mengedit.');
         }
         
@@ -196,8 +151,16 @@ class PortfolioController extends Controller
      */
     public function updatePortfolio(Request $request)
     {
-        if (!$request->session()->get('isAdmin', false)) {
-            return redirect('/')->with('error', 'Akses ditolak!');
+        // Cek apakah user login dan admin
+        if (!Auth::check()) {
+            return redirect()->route('login')->with('error', 'Anda harus login terlebih dahulu');
+        }
+        
+        $user = Auth::user();
+        $isAdmin = ($user->email === 'admin@example.com') || ($user->role === 'admin');
+        
+        if (!$isAdmin) {
+            return redirect('/')->with('error', 'Akses ditolak! Hanya admin yang bisa mengupdate.');
         }
 
         // Validasi input
@@ -226,7 +189,7 @@ class PortfolioController extends Controller
             'pendidikan' => $request->pendidikan,
             'github_url' => $request->github_url,
             'tiktok_url' => $request->tiktok_url,
-            'fotoprofil' => $this->defaultData['fotoprofil'] // Tetap pakai foto default
+            'fotoprofil' => $this->defaultData['fotoprofil']
         ];
 
         if (!$portfolio) {
@@ -247,10 +210,7 @@ class PortfolioController extends Controller
             
             foreach ($skillNames as $index => $name) {
                 if (!empty($name)) {
-                    // Tentukan icon berdasarkan nama skill
                     $icon = $this->getDefaultIcon($name);
-                    
-                    // Hitung delay berdasarkan urutan
                     $delay = 0.1 * ($index + 1);
                     
                     Skill::create([
@@ -275,21 +235,26 @@ class PortfolioController extends Controller
      */
     public function resetPortfolio(Request $request)
     {
-        if (!$request->session()->get('isAdmin', false)) {
+        if (!Auth::check()) {
+            return redirect()->route('login')->with('error', 'Anda harus login terlebih dahulu');
+        }
+        
+        $user = Auth::user();
+        $isAdmin = ($user->email === 'admin@example.com') || ($user->role === 'admin');
+        
+        if (!$isAdmin) {
             return redirect('/')->with('error', 'Akses ditolak!');
         }
         
-        // Hapus semua data portfolio dan skills
         $portfolio = Portfolio::first();
         if ($portfolio) {
             $portfolio->skills()->delete();
             $portfolio->delete();
         }
         
-        // Nonaktifkan edit mode
         $request->session()->put('editMode', false);
         
-        return redirect('/')->with('success', 'Data berhasil direset ke default! Silakan refresh halaman.');
+        return redirect('/')->with('success', 'Data berhasil direset ke default!');
     }
 
     /**
@@ -297,18 +262,23 @@ class PortfolioController extends Controller
      */
     public function importDefaultData(Request $request)
     {
-        if (!$request->session()->get('isAdmin', false)) {
+        if (!Auth::check()) {
+            return redirect()->route('login')->with('error', 'Anda harus login terlebih dahulu');
+        }
+        
+        $user = Auth::user();
+        $isAdmin = ($user->email === 'admin@example.com') || ($user->role === 'admin');
+        
+        if (!$isAdmin) {
             return redirect('/')->with('error', 'Akses ditolak!');
         }
 
-        // Hapus data lama
         $oldPortfolio = Portfolio::first();
         if ($oldPortfolio) {
             $oldPortfolio->skills()->delete();
             $oldPortfolio->delete();
         }
 
-        // Buat portfolio baru dengan data default
         $portfolio = Portfolio::create([
             'fotoprofil' => $this->defaultData['fotoprofil'],
             'name' => $this->defaultData['name'],
@@ -321,7 +291,6 @@ class PortfolioController extends Controller
             'pendidikan' => $this->defaultData['pendidikan'],
         ]);
 
-        // Buat skills dari data default
         foreach ($this->defaultData['skills'] as $skillData) {
             Skill::create([
                 'portfolio_id' => $portfolio->id,
@@ -336,19 +305,6 @@ class PortfolioController extends Controller
     }
 
     // ========== HELPER METHODS ==========
-    
-    /**
-     * Mencari user berdasarkan username dan password
-     */
-    private function findUser($username, $password)
-    {
-        foreach ($this->users as $user) {
-            if ($user['username'] === $username && $user['password'] === $password) {
-                return $user;
-            }
-        }
-        return false;
-    }
     
     /**
      * Mendapatkan icon default berdasarkan nama skill
@@ -383,6 +339,6 @@ class PortfolioController extends Controller
             }
         }
         
-        return 'fas fa-code'; // default icon
+        return 'fas fa-code';
     }
 }
